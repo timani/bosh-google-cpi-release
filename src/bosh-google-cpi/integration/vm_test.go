@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	iservice "bosh-google-cpi/google/instance_service"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	computebeta "google.golang.org/api/compute/v0.beta"
@@ -62,7 +61,12 @@ var _ = Describe("VM", func() {
 				  }
 				},
 				[],
-				{}
+				{
+				  "bosh": {
+					  "group_name": "micro-google-dummy-dummy",
+					  "groups": ["micro-google", "dummy", "dummy", "micro-google-dummy", "dummy-dummy", "micro-google-dummy-dummy-too-long-and-should-be-truncated-to-an-acceptable-length"]
+				  }
+				}
 			  ]
 			}`, existingStemcell, zone, networkName)
 		vmCID = assertSucceedsWithResult(request).(string)
@@ -77,12 +81,25 @@ var _ = Describe("VM", func() {
 
 		By("setting the VM's metadata")
 		m := map[string]string{
-			"director":           "val-with-dashes",
-			"name":               "val_with_underscores",
-			"deployment":         "val-ending-in-dash-",
-			"job":                "val-that-is-definitely-for-sure-absolutely-longer-than-the-allowable-enforced-63-char-limit-and-should-be-truncated",
+			"director":           "val-that-is-definitely-for-sure-absolutely-longer-than-the-allowable-enforced-63-char-limit-and-should-be-truncated",
+			"name":               "val_with_underscores_ending_in_dash-",
+			"deployment":         "deployment-name",
+			"job":                "job-name",
 			"index":              "0",
 			"integration-delete": "",
+		}
+		expectLabels := map[string]string{
+			"director":           "val-that-is-definitely-for-sure-absolutely-longer-than-the-al",
+			"name":               "val-with-underscores-ending-in-dash",
+			"deployment":         "deployment-name",
+			"job":                "job-name",
+			"index":              "n0",
+			"integration-delete": "",
+			"micro-google":       "",
+			"dummy":              "",
+			"micro-google-dummy": "",
+			"dummy-dummy":        "",
+			"micro-google-dummy-dummy-too-long-and-should-be-truncated-to": "",
 		}
 		mj, _ := json.Marshal(m)
 		request = fmt.Sprintf(`{
@@ -94,23 +111,8 @@ var _ = Describe("VM", func() {
 			}`, vmCID, string(mj))
 		assertSucceeds(request)
 		assertValidVMB(vmCID, func(instance *computebeta.Instance) {
-			// Apply label sanitization func
-			for _, l := range iservice.LabelList {
-				m[l.Key] = l.ValueFn(m[l.Key])
-			}
-
-			// GCE will add tags as labels with empty values. Account for this here.
-			for _, t := range iservice.TagList {
-				m[t.ValueFn(m[t.Key])] = ""
-			}
-
 			// Labels should be an exact match
-			Expect(instance.Labels).To(BeEquivalentTo(m))
-
-			// Instance should have certain tags
-			for _, t := range iservice.TagList {
-				Expect(instance.Tags.Items).To(ContainElement(t.ValueFn(m[t.Key])))
-			}
+			Expect(instance.Labels).To(BeEquivalentTo(expectLabels))
 		})
 
 		By("rebooting the VM")
@@ -494,9 +496,9 @@ var _ = Describe("VM", func() {
 		assertSucceeds(request)
 	})
 
-	It("executes the VM lifecycle with default service account scopes", func() {
+	var vmCID string
+	It("executes the VM lifecycle with default service scopes and no service account", func() {
 		By("creating a VM")
-		var vmCID string
 		request := fmt.Sprintf(`{
 			  "method": "create_vm",
 			  "arguments": [
@@ -505,7 +507,7 @@ var _ = Describe("VM", func() {
 				{
 				  "machine_type": "n1-standard-1",
 				  "zone": "%v",
-				  "service_scopes": ["devstorage.read_write"]
+				  "service_scopes": ["cloud-platform", "devstorage.read_write"]
 				},
 				{
 				  "default": {
@@ -521,6 +523,10 @@ var _ = Describe("VM", func() {
 			  ]
 			}`, existingStemcell, zone, networkName)
 		vmCID = assertSucceedsWithResult(request).(string)
+		assertValidVM(vmCID, func(instance *compute.Instance) {
+			// Labels should be an exact match
+			Expect(instance.ServiceAccounts[0].Scopes).To(Not(BeEmpty()))
+		})
 
 		By("deleting the VM")
 		request = fmt.Sprintf(`{
@@ -558,6 +564,11 @@ var _ = Describe("VM", func() {
 			  ]
 			}`, existingStemcell, zone, serviceAccount, networkName)
 		vmCID = assertSucceedsWithResult(request).(string)
+		assertValidVM(vmCID, func(instance *compute.Instance) {
+			// Labels should be an exact match
+			Expect(instance.ServiceAccounts[0].Scopes).To(Not(BeEmpty()))
+			Expect(instance.ServiceAccounts[0].Email).To(Equal(serviceAccount))
+		})
 
 		By("deleting the VM")
 		request = fmt.Sprintf(`{
@@ -567,8 +578,9 @@ var _ = Describe("VM", func() {
 		assertSucceeds(request)
 	})
 
-	It("fails the VM lifecycle with a custom service account and no scopes", func() {
+	It("executes the VM lifecycle with a custom service account and no scopes", func() {
 		By("creating a VM")
+		var vmCID string
 		request := fmt.Sprintf(`{
 			  "method": "create_vm",
 			  "arguments": [
@@ -592,10 +604,21 @@ var _ = Describe("VM", func() {
 				{}
 			  ]
 			}`, existingStemcell, zone, serviceAccount, networkName)
-		err := assertFails(request)
-		Expect(err.Error()).To(ContainSubstring("You must define at least one service scope"))
+		vmCID = assertSucceedsWithResult(request).(string)
+		assertValidVM(vmCID, func(instance *compute.Instance) {
+			// Labels should be an exact match
+			Expect(instance.ServiceAccounts[0].Scopes).To(Not(BeEmpty()))
+			Expect(instance.ServiceAccounts[0].Email).To(Equal(serviceAccount))
+		})
 
+		By("deleting the VM")
+		request = fmt.Sprintf(`{
+			  "method": "delete_vm",
+			  "arguments": ["%v"]
+			}`, vmCID)
+		assertSucceeds(request)
 	})
+
 	It("executes the VM lifecycle with a backend service", func() {
 		justInstances := func(ig *compute.InstanceGroupsListInstances) []string {
 			instances := make([]string, len(ig.Items))

@@ -2,6 +2,32 @@
 All releases of the BOSH CPI for Google Cloud Platform will be documented in
 this file. This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [25.4.1] - 2016-09-14
+
+### Fixed
+- Tags that are applied by the director on VM create will be truncated to ensure
+  they do not violate the 63-char max limit imposed by GCE.
+
+## [25.4.0] - 2016-09-14
+
+### Changed
+- When using a custom service account, a default `cloud-platform` scope is used if
+  no custom scopes are specified.
+
+## [25.3.0] - 2016-09-02
+
+### Added
+- S3 is now a supported blobstore type.
+
+## [25.2.1] - 2016-08-18
+
+### Fixed
+- Underscores are replaced with hyphens in metadata that is applied as labels
+  to a VM.
+
+### Added
+- Complete Concourse installation instructions, including cloud config and Terraform.
+
 ## [25.2.0] - 2016-08-18
 
 ### Changed
@@ -58,6 +84,10 @@ this file. This project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 - Integration tests will use the CI pipeline stemcell rather than requiring an existing stemcell in a project
 
+[25.4.1]: https://github.com/cloudfoundry-incubator/bosh-google-cpi-release/compare/v25.4.0...v25.4.1
+[25.4.0]: https://github.com/cloudfoundry-incubator/bosh-google-cpi-release/compare/v25.3.0...v25.4.0
+[25.3.0]: https://github.com/cloudfoundry-incubator/bosh-google-cpi-release/compare/v25.2.1...v25.3.0
+[25.2.1]: https://github.com/cloudfoundry-incubator/bosh-google-cpi-release/compare/v25.2.0...v25.2.1
 [25.2.0]: https://github.com/cloudfoundry-incubator/bosh-google-cpi-release/compare/v25.1.0...v25.2.0
 [25.1.0]: https://github.com/cloudfoundry-incubator/bosh-google-cpi-release/compare/v25.0.0...v25.1.0
 [25.0.0]: https://github.com/cloudfoundry-incubator/bosh-google-cpi-release/compare/v24.4.0...v25.0.0

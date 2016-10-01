@@ -1,8 +1,6 @@
 package action
 
 import (
-	"fmt"
-
 	"bosh-google-cpi/google/instance_service"
 )
 
@@ -59,14 +57,9 @@ func (n VMCloudProperties) Validate() error {
 		return err
 	}
 
-	// A custom service account requires at least one scope
-	if n.ServiceAccount != "" && len(n.ServiceScopes) == 0 {
-		return fmt.Errorf("You must define at least one service scope if you define a service account. The scope 'https://www.googleapis.com/auth/cloud-platform' will allow your service account to access all of its available IAM permissions.")
-	}
-
 	return nil
 }
 
 type VMServiceScopes []string
 type VMServiceAccount string
-type VMMetadata map[string]interface{}
+type VMMetadata map[string]string
